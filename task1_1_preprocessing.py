@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import RobustScaler
 
 import config
+from download_data import ensure_dataset
 from utils import section, save_fig, imbalance_ratio
 
 RAW_FEATURES = ["Time", "Amount"]   # the only non-PCA columns; the ones that need scaling
@@ -210,10 +211,7 @@ def prepare_data(verbose=True):
     """Load -> profile -> clean -> split. Returns a `Dataset`."""
     if verbose:
         section("TASK 1.1 - Data understanding and preprocessing")
-    if not config.DATA_PATH.exists():
-        raise FileNotFoundError(
-            f"{config.DATA_PATH} not found. Download creditcard.csv from "
-            "https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud and put it there.")
+    ensure_dataset()   # downloads creditcard.csv to config.DATA_PATH if it isn't there yet
 
     df = pd.read_csv(config.DATA_PATH)
     if config.SAMPLE_FRACTION < 1.0:
