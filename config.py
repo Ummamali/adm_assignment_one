@@ -20,7 +20,7 @@ N_JOBS = -1
 TEST_SIZE = 0.15          # 70 / 15 / 15 train / val / test
 VAL_SIZE = 0.15
 CV_FOLDS = 5
-N_SEARCH_ITER = 2         # RandomizedSearchCV budget per model
+N_SEARCH_ITER = 8         # RandomizedSearchCV budget per model
 CORR_THRESHOLD = 0.95     # |r| above which one of a feature pair is dropped
 
 # --- Task 1.3 cost matrix ---------------------------------------------
