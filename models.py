@@ -20,8 +20,7 @@ try:
     from lightgbm import LGBMClassifier
 
     def _gbm(**kw):
-        return LGBMClassifier(random_state=config.RANDOM_STATE, n_jobs=config.N_JOBS,
-                              verbose=-1, **kw)
+        return LGBMClassifier(random_state=config.RANDOM_STATE, verbose=-1, **kw)
 
     GBM_NAME = "LightGBM"
 except ImportError:  # pragma: no cover - environment dependent
@@ -50,7 +49,7 @@ MODEL_SPECS = {
     ),
     "kNN": (
         # Scale-sensitive: relies on Euclidean proximity, hence the scaler in the pipeline.
-        lambda **kw: KNeighborsClassifier(n_jobs=config.N_JOBS, **kw),
+        lambda **kw: KNeighborsClassifier(**kw),
         {"clf__n_neighbors": [3, 5, 11, 25],
          "clf__weights": ["uniform", "distance"],
          "clf__p": [1, 2]},
@@ -64,8 +63,7 @@ MODEL_SPECS = {
         {"clf__C": [0.01, 0.1, 1.0, 10.0]},
     ),
     "RandomForest": (
-        lambda **kw: RandomForestClassifier(random_state=config.RANDOM_STATE,
-                                            n_jobs=config.N_JOBS, **kw),
+        lambda **kw: RandomForestClassifier(random_state=config.RANDOM_STATE, **kw),
         {"clf__n_estimators": [200, 400],
          "clf__max_depth": [8, 16, None],
          "clf__min_samples_leaf": [1, 5, 20],
@@ -77,15 +75,29 @@ MODEL_SPECS = {
 # Only these accept `class_weight`; used by the class-weight imbalance strategy.
 SUPPORTS_CLASS_WEIGHT = {"DecisionTree", "LogReg", "RandomForest", "LightGBM", "HistGBM"}
 
+# Only these accept `n_jobs`. HistGBM (the no-LightGBM fallback) has no such knob.
+SUPPORTS_N_JOBS = {"kNN", "RandomForest", "LightGBM"}
 
-def build_pipeline(model_name, sampler=None, **model_kwargs):
+
+def build_pipeline(model_name, sampler=None, n_jobs=1, **model_kwargs):
     """Preprocessor -> (optional resampler) -> classifier, as one estimator.
 
     Using imblearn's Pipeline is what makes the resampling leakage-free: the
     sampler is applied to the training part of each CV fold only, never to the
     held-out fold.
+
+    `n_jobs` defaults to 1 (serial) on purpose: RandomizedSearchCV already
+    parallelises across CV folds x candidates, and nesting a second parallel
+    estimator (e.g. RandomForest(n_jobs=-1)) inside each of those workers
+    multiplies process/thread count far past the core count, which is what was
+    crashing the search with joblib's TerminatedWorkerError (an OOM kill) on
+    machines with limited RAM, including Colab/Kaggle's free CPU runtimes.
+    Callers doing a single, non-nested fit (e.g. the final refit of a tuned
+    model) should pass `n_jobs=config.N_JOBS` explicitly for speed.
     """
     constructor, _ = MODEL_SPECS[model_name]
+    if model_name in SUPPORTS_N_JOBS:
+        model_kwargs.setdefault("n_jobs", n_jobs)
     steps = [("prep", make_preprocessor())]
     if sampler is not None:
         steps.append(("sampler", sampler))

@@ -34,7 +34,7 @@ def run(data, model_name=None, n_windows=config.N_TIME_WINDOWS):
           f"val {X_val.shape} ({y_val.sum()}), test {X_te.shape} ({y_te.sum()})")
 
     # --- best supervised model, refitted on the past only ---------------
-    sup = models.build_pipeline(model_name).fit(X_tr, y_tr)
+    sup = models.build_pipeline(model_name, n_jobs=config.N_JOBS).fit(X_tr, y_tr)
     thr = best_f1_threshold(y_val, score_of(sup, X_val))   # threshold from the past, too
     print(f"Supervised threshold chosen on the time-ordered validation window: {thr:.3f}")
 

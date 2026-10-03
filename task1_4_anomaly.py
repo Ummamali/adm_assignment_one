@@ -90,7 +90,7 @@ def label_budget_curve(data, model_name, detector_table):
                 stratify=data.y_train, random_state=config.RANDOM_STATE)
         else:
             X_b, y_b = data.X_train, data.y_train
-        pipe = models.build_pipeline(model_name).fit(X_b, y_b)
+        pipe = models.build_pipeline(model_name, n_jobs=config.N_JOBS).fit(X_b, y_b)
         pr_auc = average_precision_score(data.y_test, score_of(pipe, data.X_test))
         rows.append({"Budget": budget, "LabelledRows": len(X_b),
                      "Frauds": int(y_b.sum()), "PR_AUC": pr_auc})

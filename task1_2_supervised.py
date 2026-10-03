@@ -72,8 +72,10 @@ def compare_strategies(data, model_names):
             variants["b) class weights"] = (None, {"class_weight": "balanced"})
 
         for strategy, (sampler, kwargs) in sorted(variants.items()):
-            pipe = models.build_pipeline(name, sampler=sampler, **kwargs).fit(
-                data.X_train, data.y_train)
+            # One fit at a time here (no outer joblib parallelism), so the
+            # estimator itself is free to use every core.
+            pipe = models.build_pipeline(name, sampler=sampler, n_jobs=config.N_JOBS,
+                                         **kwargs).fit(data.X_train, data.y_train)
             scores = score_of(pipe, data.X_val)
             rows.append({"Model": name, "Strategy": strategy,
                          **classification_metrics(data.y_val, scores, label=name)})
@@ -107,7 +109,7 @@ def get_ranked_models(data, tune_first=True, top_k=2):
     if tune_first:
         fitted, table = tune_all(data)
     else:
-        fitted = {n: models.build_pipeline(n).fit(data.X_train, data.y_train)
+        fitted = {n: models.build_pipeline(n, n_jobs=config.N_JOBS).fit(data.X_train, data.y_train)
                   for n in models.MODEL_SPECS}
         table = pd.DataFrame([classification_metrics(data.y_val, score_of(p, data.X_val), label=n)
                               for n, p in fitted.items()]).sort_values("PR_AUC", ascending=False)

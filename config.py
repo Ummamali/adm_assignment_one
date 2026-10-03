@@ -29,7 +29,8 @@ CORR_THRESHOLD = 0.95     # |r| above which one of a feature pair is dropped
 COST_FALSE_ALARM = 5.0
 
 # --- Task 1.4 ----------------------------------------------------------
-ANOMALY_SUBSAMPLE = 20_000   # LOF / One-Class SVM are O(n^2)-ish: fit on a subsample
+ANOMALY_SUBSAMPLE = 10_000   # LOF / One-Class SVM are O(n^2)-ish: fit on a subsample
+                             # (kept modest so it's safe on free-tier Colab/Kaggle RAM)
 LABEL_BUDGETS = (0.01, 0.05, 0.10, 0.25, 1.00)
 
 # --- Task 1.5 ----------------------------------------------------------
