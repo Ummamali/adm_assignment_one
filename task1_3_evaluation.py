@@ -12,6 +12,7 @@ from sklearn.metrics import (average_precision_score, precision_recall_curve,
                              roc_auc_score, roc_curve)
 
 import config
+from progress import step, track
 from task1_1_preprocessing import prepare_data
 from task1_2_supervised import get_ranked_models
 from utils import section, show_table, save_fig, classification_metrics, score_of
@@ -32,7 +33,7 @@ def accuracy_paradox(y_test):
 def final_metrics(ranked, data):
     """Confusion matrix + precision/recall/F1/MCC/ROC-AUC/PR-AUC for every final model."""
     rows = [classification_metrics(data.y_test, score_of(p, data.X_test), label=n)
-            for n, p in ranked]
+            for n, p in track(ranked, "Test-set metrics")]
     table = pd.DataFrame(rows)
     return show_table(table.round(4), "Final test-set metrics", "13_final_metrics.csv")
 
@@ -40,7 +41,7 @@ def final_metrics(ranked, data):
 def plot_curves(ranked, data, top_k=3):
     """ROC and PR curves for the top models on shared axes."""
     fig, (ax_roc, ax_pr) = plt.subplots(1, 2, figsize=(12, 5))
-    for name, pipe in ranked[:top_k]:
+    for name, pipe in track(ranked[:top_k], "ROC/PR curve"):
         s = score_of(pipe, data.X_test)
         fpr, tpr, _ = roc_curve(data.y_test, s)
         prec, rec, _ = precision_recall_curve(data.y_test, s)
@@ -126,8 +127,12 @@ def run(data, ranked):
     accuracy_paradox(data.y_test)
     metrics = final_metrics(ranked, data)
     plot_curves(ranked, data)
-    best_t = cost_analysis(ranked[0][0], ranked[0][1], data)
-    p = mcnemar(ranked, data) if len(ranked) > 1 else None
+    with step(f"Cost-optimal threshold for {ranked[0][0]}"):
+        best_t = cost_analysis(ranked[0][0], ranked[0][1], data)
+    p = None
+    if len(ranked) > 1:
+        with step("McNemar test between the two best models"):
+            p = mcnemar(ranked, data)
     return {"metrics": metrics, "cost_threshold": best_t, "mcnemar_p": p}
 
 

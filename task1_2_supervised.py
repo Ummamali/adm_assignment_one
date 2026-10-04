@@ -9,10 +9,11 @@ import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
-from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
+from sklearn.model_selection import ParameterGrid, RandomizedSearchCV, StratifiedKFold
 
 import config
 import models
+from progress import step, track
 from task1_1_preprocessing import prepare_data
 from utils import section, show_table, classification_metrics, best_f1_threshold, score_of
 
@@ -27,7 +28,11 @@ def tune(model_name, X_train, y_train):
     search = RandomizedSearchCV(
         pipe, grid, n_iter=config.N_SEARCH_ITER, scoring=SCORING, cv=CV,
         random_state=config.RANDOM_STATE, n_jobs=config.N_JOBS, refit=True)
-    search.fit(X_train, y_train)
+    # A grid smaller than n_iter is searched exhaustively, i.e. fewer candidates.
+    n_candidates = min(config.N_SEARCH_ITER, len(ParameterGrid(grid)))
+    with step(f"CV search: {n_candidates} candidates x {config.CV_FOLDS} folds + refit",
+              parallel_tasks=n_candidates * config.CV_FOLDS):
+        search.fit(X_train, y_train)
     print(f"  {model_name:<13} CV PR-AUC={search.best_score_:.4f}  "
           f"params={ {k.replace('clf__', ''): v for k, v in search.best_params_.items()} }")
     return search.best_estimator_, search.best_score_
@@ -43,10 +48,12 @@ def tune_all(data):
                                    label="MajorityBaseline")]
 
     fitted = {}
-    for name in models.MODEL_SPECS:
+    for name in track(models.MODEL_SPECS, "Tuning"):
         pipe, _ = tune(name, data.X_train, data.y_train)
         fitted[name] = pipe
-        rows.append(classification_metrics(data.y_val, score_of(pipe, data.X_val), label=name))
+        with step("Scoring the validation set"):
+            rows.append(classification_metrics(data.y_val, score_of(pipe, data.X_val),
+                                               label=name))
 
     table = pd.DataFrame(rows).sort_values("PR_AUC", ascending=False)
     show_table(table.round(4), "Validation results, default 0.5 threshold", "12_model_comparison.csv")
@@ -61,7 +68,7 @@ def compare_strategies(data, model_names):
     Resamplers live inside the pipeline, so they only ever see training rows.
     """
     print(f"\n[B] Imbalance strategies for: {', '.join(model_names)}")
-    rows = []
+    jobs = []
     for name in model_names:
         variants = {
             "a) none": (None, {}),
@@ -70,22 +77,26 @@ def compare_strategies(data, model_names):
         }
         if name in models.SUPPORTS_CLASS_WEIGHT:
             variants["b) class weights"] = (None, {"class_weight": "balanced"})
+        jobs += [(name, strategy, sampler, kwargs)
+                 for strategy, (sampler, kwargs) in sorted(variants.items())]
 
-        for strategy, (sampler, kwargs) in sorted(variants.items()):
-            # One fit at a time here (no outer joblib parallelism), so the
-            # estimator itself is free to use every core.
-            pipe = models.build_pipeline(name, sampler=sampler, n_jobs=config.N_JOBS,
-                                         **kwargs).fit(data.X_train, data.y_train)
-            scores = score_of(pipe, data.X_val)
-            rows.append({"Model": name, "Strategy": strategy,
-                         **classification_metrics(data.y_val, scores, label=name)})
+    rows = []
+    for name, strategy, sampler, kwargs in track(jobs, "Strategy fit",
+                                                 describe=lambda j: f"{j[0]} / {j[1]}"):
+        # One fit at a time here (no outer joblib parallelism), so the
+        # estimator itself is free to use every core.
+        pipe = models.build_pipeline(name, sampler=sampler, n_jobs=config.N_JOBS,
+                                     **kwargs).fit(data.X_train, data.y_train)
+        scores = score_of(pipe, data.X_val)
+        rows.append({"Model": name, "Strategy": strategy,
+                     **classification_metrics(data.y_val, scores, label=name)})
 
-            # (e) threshold moving re-uses the untreated model, only the cut-off moves.
-            if strategy == "a) none":
-                thr = best_f1_threshold(data.y_val, scores)
-                rows.append({"Model": name, "Strategy": "e) threshold moving",
-                             **classification_metrics(data.y_val, scores, threshold=thr,
-                                                      label=name)})
+        # (e) threshold moving re-uses the untreated model, only the cut-off moves.
+        if strategy == "a) none":
+            thr = best_f1_threshold(data.y_val, scores)
+            rows.append({"Model": name, "Strategy": "e) threshold moving",
+                         **classification_metrics(data.y_val, scores, threshold=thr,
+                                                  label=name)})
 
     table = pd.DataFrame(rows)[["Model", "Strategy", "Threshold", "TP", "FP", "FN",
                                 "Precision", "Recall", "F1", "MCC", "ROC_AUC", "PR_AUC"]]
@@ -110,7 +121,7 @@ def get_ranked_models(data, tune_first=True, top_k=2):
         fitted, table = tune_all(data)
     else:
         fitted = {n: models.build_pipeline(n, n_jobs=config.N_JOBS).fit(data.X_train, data.y_train)
-                  for n in models.MODEL_SPECS}
+                  for n in track(models.MODEL_SPECS, "Fitting with default parameters")}
         table = pd.DataFrame([classification_metrics(data.y_val, score_of(p, data.X_val), label=n)
                               for n, p in fitted.items()]).sort_values("PR_AUC", ascending=False)
     order = [n for n in table["Model"] if n in fitted][:top_k]

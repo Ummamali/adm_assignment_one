@@ -1,0 +1,51 @@
+
+======================================================================
+TASK 1.1 - Data understanding and preprocessing
+======================================================================
+[data] /content/adm_assignment_one/data/creditcard.csv not found - downloading 'mlg-ulb/creditcardfraud' via kagglehub...
+Using Colab cache for faster access to the 'creditcardfraud' dataset.
+[data] ready at /content/adm_assignment_one/data/creditcard.csv (150.8 MB)
+Shape: (284807, 31)
+Dtypes: {dtype('float64'): 30, dtype('int64'): 1}
+Missing values: 0
+Infinite values: 0
+Exact duplicate rows: 1081
+
+Class counts: {0: 284315, 1: 492}
+Fraud rate: 0.173%
+Imbalance ratio (legit:fraud) = 578:1
+  saved figure -> figures/11_class_distribution.png
+
+Top 10 informative features (|corr| with Class): {'V17': 0.326, 'V14': 0.303, 'V12': 0.261, 'V10': 0.217, 'V16': 0.197, 'V3': 0.193, 'V7': 0.187, 'V11': 0.155, 'V4': 0.133, 'V18': 0.111}
+  saved figure -> figures/11_top_feature_distributions.png
+Dropped 1081 duplicate rows (a duplicate split across train and test is a memorised answer).
+No feature pair exceeds |r| > 0.95 (expected: V1-V28 are PCA components and therefore near-orthogonal).
+
+Random split -> train (198608, 30), val (42559, 30), test (42559, 30)
+Frauds per split: train 331, val 71, test 71
+
+LEAKAGE AUDIT
+  - Scaling: Fitting RobustScaler on all rows leaks the test median and IQR into training.
+      -> The scaler is a step inside the imblearn Pipeline, so it is re-fitted on the training part of every CV fold and on train only for the final fit.
+  - Oversampling (SMOTE): Synthesising before splitting puts interpolated copies of test frauds in train.
+      -> SMOTE is a Pipeline step, so it runs after the fold split and never sees the validation fold.
+  - Undersampling: Resampling the whole set changes the test prior and inflates precision.
+      -> RandomUnderSampler sits in the same Pipeline; validation and test keep their natural 0.17% fraud prior.
+  - Feature selection: Dropping features using the target over all rows is target leakage.
+      -> Only target-free rules are used (zero variance, feature-feature |r|). The correlation-with-target ranking is used for plots only, never for removal.
+  - Duplicates: An exact duplicate split across train and test is a memorised answer.
+      -> Duplicates are removed before any split is made.
+  - Hyperparameters and thresholds: Tuning on test turns it into a second validation set.
+      -> Hyperparameters come from 5-fold CV on train; the decision threshold and the cost-optimal cut-off come from the validation split. Test is scored once.
+  - Temporal order: A random split lets the model learn from the future.
+      -> Protocol (ii) trains strictly on the earliest 70% by Time, and Task 1.5 refits on that split instead of reusing the random-split model.
+
+======================================================================
+TASK 1.2 - Supervised classification under imbalance
+======================================================================
+
+[A] Hyperparameter tuning (5-fold CV on train only, scoring = PR-AUC)
+  DecisionTree  CV PR-AUC=0.7756  params={'min_samples_leaf': 50, 'max_depth': 6, 'criterion': 'entropy'}
+  kNN           CV PR-AUC=0.8209  params={'weights': 'distance', 'p': 1, 'n_neighbors': 25}
+  NaiveBayes    CV PR-AUC=0.0854  params={'var_smoothing': 1e-05}
+  LogReg        CV PR-AUC=0.7564  params={'C': 0.1}

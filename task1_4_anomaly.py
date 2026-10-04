@@ -15,6 +15,7 @@ from sklearn.svm import OneClassSVM
 
 import config
 import models
+from progress import track
 from task1_1_preprocessing import prepare_data, make_preprocessor
 from task1_2_supervised import get_ranked_models
 from utils import section, show_table, save_fig, precision_at_k, score_of
@@ -51,22 +52,26 @@ def evaluate_detectors(data):
         "semi-supervised": X_normal,
     }
 
+    jobs = [(name, setting, X_fit, det)
+            for setting, X_fit in settings.items()
+            for name, det in make_detectors().items()]   # fresh detectors per setting
+
     rows, scores = [], {}
-    for setting, X_fit in settings.items():
-        for name, det in make_detectors().items():
-            fit_data = X_fit if name == "IsolationForest" else _subsample(
-                X_fit, config.ANOMALY_SUBSAMPLE)
-            det.fit(fit_data)
-            # score_samples is "higher = more normal"; negate so higher = more anomalous.
-            s = -det.score_samples(X_te)
-            scores[f"{name} ({setting})"] = s
-            rows.append({
-                "Detector": name, "Setting": setting, "FitRows": len(fit_data),
-                "ROC_AUC": roc_auc_score(data.y_test, s),
-                "PR_AUC": average_precision_score(data.y_test, s),
-                "Precision@k": precision_at_k(data.y_test, s),
-            })
-            print(f"  {name:<16} {setting:<16} PR-AUC={rows[-1]['PR_AUC']:.4f}")
+    for name, setting, X_fit, det in track(jobs, "Detector",
+                                           describe=lambda j: f"{j[0]} / {j[1]}"):
+        fit_data = X_fit if name == "IsolationForest" else _subsample(
+            X_fit, config.ANOMALY_SUBSAMPLE)
+        det.fit(fit_data)
+        # score_samples is "higher = more normal"; negate so higher = more anomalous.
+        s = -det.score_samples(X_te)
+        scores[f"{name} ({setting})"] = s
+        rows.append({
+            "Detector": name, "Setting": setting, "FitRows": len(fit_data),
+            "ROC_AUC": roc_auc_score(data.y_test, s),
+            "PR_AUC": average_precision_score(data.y_test, s),
+            "Precision@k": precision_at_k(data.y_test, s),
+        })
+        print(f"  {name:<16} {setting:<16} PR-AUC={rows[-1]['PR_AUC']:.4f}")
 
     table = pd.DataFrame(rows).sort_values("PR_AUC", ascending=False)
     show_table(table.round(4),
@@ -83,7 +88,8 @@ def label_budget_curve(data, model_name, detector_table):
     """
     print("\nLabel-budget experiment")
     rows = []
-    for budget in config.LABEL_BUDGETS:
+    for budget in track(config.LABEL_BUDGETS, f"Refitting {model_name}",
+                        describe=lambda b: f"on {b:.0%} of the labels"):
         if budget < 1.0:
             X_b, _, y_b, _ = train_test_split(
                 data.X_train, data.y_train, train_size=budget,

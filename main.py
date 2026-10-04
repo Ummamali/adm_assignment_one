@@ -6,6 +6,7 @@ the entry point that produces the full set of figures and tables for the report.
 import warnings
 
 import config
+from progress import run_elapsed
 import task1_1_preprocessing as t11
 import task1_2_supervised as t12
 import task1_3_evaluation as t13
@@ -34,7 +35,8 @@ def main():
     t17.run({"supervised": supervised, "evaluation": evaluation, "anomaly": anomaly,
              "drift": drift, "explain": explain})
 
-    print(f"\nDone. Figures -> {config.FIG_DIR.name}/, tables -> {config.TABLE_DIR.name}/")
+    print(f"\nDone in {run_elapsed()}. Figures -> {config.FIG_DIR.name}/, "
+          f"tables -> {config.TABLE_DIR.name}/")
 
 
 if __name__ == "__main__":

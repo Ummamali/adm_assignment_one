@@ -63,11 +63,16 @@ MODEL_SPECS = {
         {"clf__C": [0.01, 0.1, 1.0, 10.0]},
     ),
     "RandomForest": (
-        lambda **kw: RandomForestClassifier(random_state=config.RANDOM_STATE, **kw),
-        {"clf__n_estimators": [200, 400],
-         "clf__max_depth": [8, 16, None],
-         "clf__min_samples_leaf": [1, 5, 20],
-         "clf__max_features": ["sqrt", 0.5]},
+        # Fixed, not tuned: 100 trees (more only costs time; PR-AUC is flat beyond
+        # ~100), sqrt features per split (the standard RF choice, and the cheapest),
+        # and fully grown depth, with tree size controlled by leaf size instead -
+        # a depth cap would cut off the small fraud regions (~265 frauds per fold).
+        lambda **kw: RandomForestClassifier(n_estimators=100, max_features="sqrt",
+                                            random_state=config.RANDOM_STATE, **kw),
+        # The one question worth CV: fully grown leaves (textbook RF) or mildly
+        # smoothed ones, which give better-ranked probabilities - what PR-AUC scores.
+        # 2 candidates x 5 folds = 10 fits.
+        {"clf__min_samples_leaf": [1, 5]},
     ),
     GBM_NAME: (_gbm, _GBM_GRID),
 }

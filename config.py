@@ -15,6 +15,9 @@ RANDOM_STATE = 42
 # final run that goes into the report.
 SAMPLE_FRACTION = 1.0
 N_JOBS = -1
+# While a step runs, print a "still running" line whenever the console has been
+# quiet for this many seconds (see progress.py).
+HEARTBEAT_SECONDS = 30
 
 # --- Protocol ----------------------------------------------------------
 TEST_SIZE = 0.15          # 70 / 15 / 15 train / val / test

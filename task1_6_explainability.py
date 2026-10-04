@@ -11,6 +11,7 @@ from sklearn.inspection import permutation_importance
 
 import config
 import models
+from progress import step, track
 from task1_1_preprocessing import prepare_data
 from task1_2_supervised import get_ranked_models
 from utils import section, show_table, save_fig, score_of
@@ -39,9 +40,12 @@ def global_importance(name, pipe, data):
 
     X_s = data.X_test.sample(min(PERM_SAMPLE, len(data.X_test)),
                              random_state=config.RANDOM_STATE)
-    perm = permutation_importance(pipe, X_s, data.y_test.loc[X_s.index],
-                                  scoring="average_precision", n_repeats=5,
-                                  random_state=config.RANDOM_STATE, n_jobs=config.N_JOBS)
+    # permutation_importance runs one joblib task per feature column.
+    with step(f"Permutation importance on {len(X_s)} test rows x 5 repeats",
+              parallel_tasks=len(features)):
+        perm = permutation_importance(pipe, X_s, data.y_test.loc[X_s.index],
+                                      scoring="average_precision", n_repeats=5,
+                                      random_state=config.RANDOM_STATE, n_jobs=config.N_JOBS)
 
     table = (pd.DataFrame({"Feature": features,
                            "Impurity": impurity.to_numpy(),
@@ -84,21 +88,22 @@ def local_explanations(name, pipe, data, threshold=0.5):
 
     # Global SHAP summary on a sample, for the report.
     sample = X_t.sample(min(n_sample, len(X_t)), random_state=config.RANDOM_STATE)
-    plt.figure()
-    shap.summary_plot(_positive_class(explainer.shap_values(sample)), sample, show=False)
-    save_fig(plt.gcf(), "16_shap_summary.png")
+    with step(f"SHAP summary on {len(sample)} test rows"):
+        plt.figure()
+        shap.summary_plot(_positive_class(explainer.shap_values(sample)), sample, show=False)
+        save_fig(plt.gcf(), "16_shap_summary.png")
 
     rows = []
-    for kind, idxs in cases.items():
-        for i in idxs:
-            row = X_t.iloc[[i]]
-            sv = pd.Series(_positive_class(explainer.shap_values(row))[0], index=X_t.columns)
-            top = sv.reindex(sv.abs().sort_values(ascending=False).index).head(3)
-            drivers = ", ".join(f"{f} ({'+' if v > 0 else '-'}{abs(v):.2f})"
-                                for f, v in top.items())
-            rows.append({"Case": kind, "Index": int(i), "Score": round(float(scores[i]), 4),
-                         "Amount": round(float(data.X_test.iloc[i]["Amount"]), 2),
-                         "TopDrivers": drivers})
+    picked = [(kind, i) for kind, idxs in cases.items() for i in idxs]
+    for kind, i in track(picked, "SHAP case", describe=lambda c: f"{c[0]} txn #{c[1]}"):
+        row = X_t.iloc[[i]]
+        sv = pd.Series(_positive_class(explainer.shap_values(row))[0], index=X_t.columns)
+        top = sv.reindex(sv.abs().sort_values(ascending=False).index).head(3)
+        drivers = ", ".join(f"{f} ({'+' if v > 0 else '-'}{abs(v):.2f})"
+                            for f, v in top.items())
+        rows.append({"Case": kind, "Index": int(i), "Score": round(float(scores[i]), 4),
+                     "Amount": round(float(data.X_test.iloc[i]["Amount"]), 2),
+                     "TopDrivers": drivers})
 
     table = pd.DataFrame(rows)
     show_table(table, "Local SHAP explanations", "16_local_explanations.csv")
@@ -173,9 +178,12 @@ def run(data, ranked, anomaly_scores=None):
     if name != ranked[0][0]:
         print(f"Best model ({ranked[0][0]}) has no impurity importance; "
               f"explaining the best tree-based model instead: {name}.")
-    importance = global_importance(name, pipe, data)
-    local = local_explanations(name, pipe, data)
-    agreement = detector_agreement(data, anomaly_scores, importance, pipe)
+    with step(f"Global feature importance - {name}"):
+        importance = global_importance(name, pipe, data)
+    with step(f"Local SHAP explanations - {name}"):
+        local = local_explanations(name, pipe, data)
+    with step("Detector vs classifier agreement"):
+        agreement = detector_agreement(data, anomaly_scores, importance, pipe)
     return {"global": importance, "local": local, "agreement": agreement}
 
 

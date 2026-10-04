@@ -13,6 +13,7 @@ from sklearn.metrics import precision_score, recall_score
 
 import config
 import models
+from progress import step, track
 from task1_1_preprocessing import prepare_data, make_preprocessor
 from task1_2_supervised import get_ranked_models
 from utils import section, show_table, save_fig, best_f1_threshold, score_of
@@ -34,20 +35,24 @@ def run(data, model_name=None, n_windows=config.N_TIME_WINDOWS):
           f"val {X_val.shape} ({y_val.sum()}), test {X_te.shape} ({y_te.sum()})")
 
     # --- best supervised model, refitted on the past only ---------------
-    sup = models.build_pipeline(model_name, n_jobs=config.N_JOBS).fit(X_tr, y_tr)
-    thr = best_f1_threshold(y_val, score_of(sup, X_val))   # threshold from the past, too
+    with step(f"Refitting {model_name} on the time-ordered train split"):
+        sup = models.build_pipeline(model_name, n_jobs=config.N_JOBS).fit(X_tr, y_tr)
+        thr = best_f1_threshold(y_val, score_of(sup, X_val))   # threshold from the past, too
     print(f"Supervised threshold chosen on the time-ordered validation window: {thr:.3f}")
 
     # --- best anomaly detector, fitted on past normal traffic -----------
-    pre = make_preprocessor().fit(X_tr)
-    det = IsolationForest(n_estimators=200, random_state=config.RANDOM_STATE,
-                          n_jobs=config.N_JOBS).fit(pre.transform(X_tr)[y_tr.to_numpy() == 0])
+    with step("Fitting IsolationForest on past normal traffic"):
+        pre = make_preprocessor().fit(X_tr)
+        det = IsolationForest(n_estimators=200, random_state=config.RANDOM_STATE,
+                              n_jobs=config.N_JOBS).fit(pre.transform(X_tr)[y_tr.to_numpy() == 0])
     # The detector has no probability, so it gets a fixed alert budget: flag the
     # top q% of each window, with q = the fraud rate observed in training.
     alert_rate = max(y_tr.mean(), 1e-4)
 
     rows = []
-    for i, (Xw, yw) in enumerate(_windows(X_te, y_te, n_windows), start=1):
+    windows = enumerate(_windows(X_te, y_te, n_windows), start=1)
+    for i, (Xw, yw) in track(windows, "Scoring time window",
+                            describe=lambda w: f"W{w[0]}"):
         sup_pred = (score_of(sup, Xw) >= thr).astype(int)
         anom_score = -det.score_samples(pre.transform(Xw))
         cutoff = np.quantile(anom_score, 1 - alert_rate)

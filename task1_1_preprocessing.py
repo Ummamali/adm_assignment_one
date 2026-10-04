@@ -14,6 +14,7 @@ from sklearn.preprocessing import RobustScaler
 
 import config
 from download_data import ensure_dataset
+from progress import step
 from utils import section, save_fig, imbalance_ratio
 
 RAW_FEATURES = ["Time", "Amount"]   # the only non-PCA columns; the ones that need scaling
@@ -211,28 +212,33 @@ def prepare_data(verbose=True):
     """Load -> profile -> clean -> split. Returns a `Dataset`."""
     if verbose:
         section("TASK 1.1 - Data understanding and preprocessing")
-    ensure_dataset()   # downloads creditcard.csv to config.DATA_PATH if it isn't there yet
-
-    df = pd.read_csv(config.DATA_PATH)
-    if config.SAMPLE_FRACTION < 1.0:
-        # Stratified subsample so the fraud rate survives a smoke test.
-        df = df.groupby(TARGET, group_keys=False).sample(
-            frac=config.SAMPLE_FRACTION, random_state=config.RANDOM_STATE)
-        print(f"[!] Running on a {config.SAMPLE_FRACTION:.0%} stratified subsample.")
+    with step("Loading the dataset"):
+        ensure_dataset()   # downloads creditcard.csv to config.DATA_PATH if it isn't there yet
+        df = pd.read_csv(config.DATA_PATH)
+        if config.SAMPLE_FRACTION < 1.0:
+            # Stratified subsample so the fraud rate survives a smoke test.
+            df = df.groupby(TARGET, group_keys=False).sample(
+                frac=config.SAMPLE_FRACTION, random_state=config.RANDOM_STATE)
+            print(f"[!] Running on a {config.SAMPLE_FRACTION:.0%} stratified subsample.")
 
     if verbose:
-        profile(df)
-        plot_top_features(df)
-    df = clean(df)
+        with step("Profiling"):
+            profile(df)
+        with step("Plotting the top-10 feature distributions"):
+            plot_top_features(df)
+    with step("Cleaning"):
+        df = clean(df)
 
-    X_tr, y_tr, X_val, y_val, X_te, y_te = split_random(df)
+    with step("Building both split protocols"):
+        X_tr, y_tr, X_val, y_val, X_te, y_te = split_random(df)
+        time_splits = split_time(df)
     if verbose:
         print(f"\nRandom split -> train {X_tr.shape}, val {X_val.shape}, test {X_te.shape}")
         print(f"Frauds per split: train {y_tr.sum()}, val {y_val.sum()}, test {y_te.sum()}")
         leakage_audit()
 
     return Dataset(X_tr, y_tr, X_val, y_val, X_te, y_te,
-                   time_splits=split_time(df), features=list(X_tr.columns))
+                   time_splits=time_splits, features=list(X_tr.columns))
 
 
 if __name__ == "__main__":

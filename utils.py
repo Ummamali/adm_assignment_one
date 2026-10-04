@@ -10,12 +10,13 @@ from sklearn.metrics import (
 )
 
 import config
+from progress import run_elapsed
 
 
 # --- console ----------------------------------------------------------
 def section(title):
     """Print a visible banner so the console log maps onto the report sections."""
-    print(f"\n{'=' * 70}\n{title}\n{'=' * 70}")
+    print(f"\n{'=' * 70}\n{title}   [run time so far: {run_elapsed()}]\n{'=' * 70}")
 
 
 def show_table(df, title=None, path=None):
