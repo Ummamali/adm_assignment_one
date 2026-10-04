@@ -1,0 +1,755 @@
+
+======================================================================
+TASK 1.1 - Data understanding and preprocessing   [run time so far: 7s]
+======================================================================
+[07:20:54] >> Loading the dataset
+[data] /content/adm_assignment_one/data/creditcard.csv not found - downloading 'mlg-ulb/creditcardfraud' via kagglehub...
+Using Colab cache for faster access to the 'creditcardfraud' dataset.
+[data] ready at /content/adm_assignment_one/data/creditcard.csv (150.8 MB)
+[07:21:03] << Loading the dataset - done in 8s
+[07:21:03] >> Profiling
+Shape: (284807, 31)
+Dtypes: {dtype('float64'): 30, dtype('int64'): 1}
+Missing values: 0
+Infinite values: 0
+Exact duplicate rows: 1081
+
+Class counts: {0: 284315, 1: 492}
+Fraud rate: 0.173%
+Imbalance ratio (legit:fraud) = 578:1
+  saved figure -> figures/11_class_distribution.png
+[07:21:04] << Profiling - done in 2s
+[07:21:04] >> Plotting the top-10 feature distributions
+
+Top 10 informative features (|corr| with Class): {'V17': 0.326, 'V14': 0.303, 'V12': 0.261, 'V10': 0.217, 'V16': 0.197, 'V3': 0.193, 'V7': 0.187, 'V11': 0.155, 'V4': 0.133, 'V18': 0.111}
+  saved figure -> figures/11_top_feature_distributions.png
+[07:21:07] << Plotting the top-10 feature distributions - done in 3s
+[07:21:07] >> Cleaning
+Dropped 1081 duplicate rows (a duplicate split across train and test is a memorised answer).
+No feature pair exceeds |r| > 0.95 (expected: V1-V28 are PCA components and therefore near-orthogonal).
+[07:21:09] << Cleaning - done in 2s
+[07:21:09] >> Building both split protocols
+[07:21:10] << Building both split protocols - done in 0s
+
+Random split -> train (198608, 30), val (42559, 30), test (42559, 30)
+Frauds per split: train 331, val 71, test 71
+
+LEAKAGE AUDIT
+  - Scaling: Fitting RobustScaler on all rows leaks the test median and IQR into training.
+      -> The scaler is a step inside the imblearn Pipeline, so it is re-fitted on the training part of every CV fold and on train only for the final fit.
+  - Oversampling (SMOTE): Synthesising before splitting puts interpolated copies of test frauds in train.
+      -> SMOTE is a Pipeline step, so it runs after the fold split and never sees the validation fold.
+  - Undersampling: Resampling the whole set changes the test prior and inflates precision.
+      -> RandomUnderSampler sits in the same Pipeline; validation and test keep their natural 0.17% fraud prior.
+  - Feature selection: Dropping features using the target over all rows is target leakage.
+      -> Only target-free rules are used (zero variance, feature-feature |r|). The correlation-with-target ranking is used for plots only, never for removal.
+  - Duplicates: An exact duplicate split across train and test is a memorised answer.
+      -> Duplicates are removed before any split is made.
+  - Hyperparameters and thresholds: Tuning on test turns it into a second validation set.
+      -> Hyperparameters come from 5-fold CV on train; the decision threshold and the cost-optimal cut-off come from the validation split. Test is scored once.
+  - Temporal order: A random split lets the model learn from the future.
+      -> Protocol (ii) trains strictly on the earliest 70% by Time, and Task 1.5 refits on that split instead of reusing the random-split model.
+
+======================================================================
+TASK 1.2 - Supervised classification under imbalance   [run time so far: 22s]
+======================================================================
+
+[A] Hyperparameter tuning (5-fold CV on train only, scoring = PR-AUC)
+[07:21:10] >> Tuning [1/6] DecisionTree
+[07:21:10]   >> CV search: 8 candidates x 5 folds + refit
+[07:21:44]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 35s | ETA ~11m01s
+[07:22:14]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 1m05s | ETA ~9m43s
+[07:22:44]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 1m35s | ETA ~8m57s
+[07:23:14]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 2m05s | ETA ~8m19s
+[07:23:44]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 2m35s | ETA ~7m44s
+[07:24:14]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 3m05s | ETA ~7m11s
+[07:24:44]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 16/40 tasks | 3m35s | ETA ~5m22s
+[07:25:14]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 4m05s | ETA ~4m05s
+[07:25:44]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 25/40 tasks | 4m35s | ETA ~2m45s
+[07:26:14]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 27/40 tasks | 5m05s | ETA ~2m27s
+[07:26:44]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 29/40 tasks | 5m35s | ETA ~2m07s
+[07:27:14]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 33/40 tasks | 6m05s | ETA ~1m17s
+[07:27:44]     .. still running: Tuning [1/6] DecisionTree > CV search: 8 candidates x 5 folds + refit | 37/40 tasks | 6m35s | ETA ~32s
+[07:28:10]   << CV search: 8 candidates x 5 folds + refit - done in 7m00s
+  DecisionTree  CV PR-AUC=0.7756  params={'min_samples_leaf': 50, 'max_depth': 6, 'criterion': 'entropy'}
+[07:28:10]   >> Scoring the validation set
+[07:28:10]   << Scoring the validation set - done in 0s
+[07:28:10] << Tuning [1/6] DecisionTree - done in 7m01s
+[07:28:10] >> Tuning [2/6] kNN   (ETA for the rest ~35m03s)
+[07:28:10]   >> CV search: 8 candidates x 5 folds + refit
+[07:28:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 34s
+[07:29:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 1m04s
+[07:29:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 1m34s
+[07:30:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 2m04s
+[07:30:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 2m34s
+[07:31:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 3m04s
+[07:31:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 3m34s
+[07:32:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 4m04s
+[07:32:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 4m34s
+[07:33:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 5m04s
+[07:33:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 5m34s
+[07:34:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 0/40 tasks | 6m04s
+[07:34:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 6m34s | ETA ~2h04m52s
+[07:35:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 7m04s | ETA ~2h14m22s
+[07:35:44]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 7m34s | ETA ~2h23m52s
+[07:36:14]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 8m04s | ETA ~2h33m23s
+[07:36:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 8m34s | ETA ~2h42m53s
+[07:37:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 9m04s | ETA ~2h52m23s
+[07:37:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 9m34s | ETA ~3h01m53s
+[07:38:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 10m04s | ETA ~3h11m23s
+[07:38:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 10m34s | ETA ~3h20m53s
+[07:39:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 11m04s | ETA ~3h30m23s
+[07:39:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 11m34s | ETA ~3h39m53s
+[07:40:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 12m04s | ETA ~3h49m23s
+[07:40:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 2/40 tasks | 12m34s | ETA ~3h58m53s
+[07:41:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 13m04s | ETA ~1h57m39s
+[07:41:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 13m34s | ETA ~2h02m09s
+[07:42:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 14m04s | ETA ~2h06m39s
+[07:42:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 14m34s | ETA ~2h11m09s
+[07:43:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 15m04s | ETA ~2h15m39s
+[07:43:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 15m34s | ETA ~2h20m09s
+[07:44:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 16m04s | ETA ~2h24m39s
+[07:44:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 16m34s | ETA ~2h29m09s
+[07:45:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 17m04s | ETA ~2h33m39s
+[07:45:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 17m34s | ETA ~2h38m09s
+[07:46:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 18m04s | ETA ~2h42m39s
+[07:46:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 4/40 tasks | 18m34s | ETA ~2h47m10s
+[07:47:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 19m04s | ETA ~1h48m05s
+[07:47:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 19m34s | ETA ~1h50m55s
+[07:48:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 20m04s | ETA ~1h53m45s
+[07:48:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 20m34s | ETA ~1h56m35s
+[07:49:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 21m04s | ETA ~1h59m25s
+[07:49:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 21m34s | ETA ~2h02m15s
+[07:50:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 22m04s | ETA ~2h05m05s
+[07:50:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 22m34s | ETA ~2h07m55s
+[07:51:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 23m04s | ETA ~2h10m45s
+[07:51:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 23m34s | ETA ~2h13m35s
+[07:52:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 24m04s | ETA ~2h16m25s
+[07:52:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 24m34s | ETA ~2h19m15s
+[07:53:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 25m04s | ETA ~2h22m05s
+[07:53:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 25m34s | ETA ~1h42m18s
+[07:54:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 26m04s | ETA ~1h44m18s
+[07:54:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 26m34s | ETA ~1h46m18s
+[07:55:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 27m04s | ETA ~1h48m18s
+[07:55:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 27m34s | ETA ~1h50m18s
+[07:56:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 28m04s | ETA ~1h52m18s
+[07:56:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 28m34s | ETA ~1h54m18s
+[07:57:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 29m04s | ETA ~1h56m18s
+[07:57:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 29m34s | ETA ~1h58m18s
+[07:58:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 30m04s | ETA ~2h00m18s
+[07:58:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 30m34s | ETA ~2h02m18s
+[07:59:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 31m04s | ETA ~2h04m18s
+[07:59:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 8/40 tasks | 31m34s | ETA ~2h06m18s
+[08:00:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 32m04s | ETA ~1h36m13s
+[08:00:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 32m34s | ETA ~1h37m43s
+[08:01:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 33m04s | ETA ~1h39m13s
+[08:01:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 33m34s | ETA ~1h40m43s
+[08:02:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 34m04s | ETA ~1h42m13s
+[08:02:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 34m34s | ETA ~1h43m43s
+[08:03:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 35m05s | ETA ~1h45m14s
+[08:03:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 35m35s | ETA ~1h46m44s
+[08:04:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 36m05s | ETA ~1h48m14s
+[08:04:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 36m35s | ETA ~1h49m44s
+[08:05:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 37m05s | ETA ~1h51m14s
+[08:05:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 10/40 tasks | 37m35s | ETA ~1h52m44s
+[08:06:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 38m05s | ETA ~1h28m51s
+[08:06:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 38m35s | ETA ~1h30m01s
+[08:07:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 39m05s | ETA ~1h31m11s
+[08:07:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 39m35s | ETA ~1h32m21s
+[08:08:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 40m05s | ETA ~1h33m31s
+[08:08:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 40m35s | ETA ~1h34m41s
+[08:09:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 41m05s | ETA ~1h35m51s
+[08:09:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 41m35s | ETA ~1h37m01s
+[08:10:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 42m05s | ETA ~1h38m11s
+[08:10:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 42m35s | ETA ~1h39m21s
+[08:11:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 43m05s | ETA ~1h40m31s
+[08:11:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 43m35s | ETA ~1h41m41s
+[08:12:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 12/40 tasks | 44m05s | ETA ~1h42m51s
+[08:12:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 14/40 tasks | 44m35s | ETA ~1h22m47s
+[08:13:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 14/40 tasks | 45m05s | ETA ~1h23m43s
+[08:13:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 14/40 tasks | 45m35s | ETA ~1h24m38s
+[08:14:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 15/40 tasks | 46m05s | ETA ~1h16m48s
+[08:14:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 15/40 tasks | 46m35s | ETA ~1h17m38s
+[08:15:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 15/40 tasks | 47m05s | ETA ~1h18m28s
+[08:15:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 16/40 tasks | 47m35s | ETA ~1h11m22s
+[08:16:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 16/40 tasks | 48m05s | ETA ~1h12m07s
+[08:16:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 17/40 tasks | 48m35s | ETA ~1h05m43s
+[08:17:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 17/40 tasks | 49m05s | ETA ~1h06m24s
+[08:17:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 17/40 tasks | 49m35s | ETA ~1h07m04s
+[08:18:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 18/40 tasks | 50m05s | ETA ~1h01m12s
+[08:18:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 18/40 tasks | 50m35s | ETA ~1h01m49s
+[08:19:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 18/40 tasks | 51m05s | ETA ~1h02m26s
+[08:19:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 51m35s | ETA ~51m35s
+[08:20:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 52m05s | ETA ~52m05s
+[08:20:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 52m35s | ETA ~52m35s
+[08:21:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 53m05s | ETA ~53m05s
+[08:21:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 53m35s | ETA ~53m35s
+[08:22:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 54m05s | ETA ~54m05s
+[08:22:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 54m35s | ETA ~54m35s
+[08:23:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 55m05s | ETA ~55m05s
+[08:23:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 55m35s | ETA ~55m35s
+[08:24:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 56m05s | ETA ~56m05s
+[08:24:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 56m35s | ETA ~56m35s
+[08:25:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 57m05s | ETA ~57m05s
+[08:25:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 20/40 tasks | 57m35s | ETA ~57m35s
+[08:26:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 58m05s | ETA ~47m31s
+[08:26:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 58m35s | ETA ~47m56s
+[08:27:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 59m05s | ETA ~48m20s
+[08:27:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 59m35s | ETA ~48m45s
+[08:28:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h00m05s | ETA ~49m09s
+[08:28:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h00m35s | ETA ~49m34s
+[08:29:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h01m05s | ETA ~49m58s
+[08:29:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h01m35s | ETA ~50m23s
+[08:30:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h02m05s | ETA ~50m47s
+[08:30:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h02m35s | ETA ~51m12s
+[08:31:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h03m05s | ETA ~51m37s
+[08:31:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 22/40 tasks | 1h03m35s | ETA ~52m01s
+[08:32:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 24/40 tasks | 1h04m05s | ETA ~42m43s
+[08:32:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 24/40 tasks | 1h04m35s | ETA ~43m03s
+[08:33:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 24/40 tasks | 1h05m05s | ETA ~43m23s
+[08:33:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 25/40 tasks | 1h05m35s | ETA ~39m21s
+[08:34:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 25/40 tasks | 1h06m05s | ETA ~39m39s
+[08:34:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 25/40 tasks | 1h06m35s | ETA ~39m57s
+[08:35:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 26/40 tasks | 1h07m05s | ETA ~36m07s
+[08:35:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 26/40 tasks | 1h07m35s | ETA ~36m23s
+[08:36:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 26/40 tasks | 1h08m05s | ETA ~36m39s
+[08:36:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 27/40 tasks | 1h08m35s | ETA ~33m01s
+[08:37:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 27/40 tasks | 1h09m05s | ETA ~33m16s
+[08:37:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 27/40 tasks | 1h09m35s | ETA ~33m30s
+[08:38:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 28/40 tasks | 1h10m05s | ETA ~30m02s
+[08:38:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 28/40 tasks | 1h10m35s | ETA ~30m15s
+[08:39:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h11m05s | ETA ~23m42s
+[08:39:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h11m35s | ETA ~23m52s
+[08:40:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h12m05s | ETA ~24m02s
+[08:40:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h12m35s | ETA ~24m12s
+[08:41:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h13m05s | ETA ~24m22s
+[08:41:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h13m35s | ETA ~24m32s
+[08:42:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h14m05s | ETA ~24m42s
+[08:42:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h14m35s | ETA ~24m52s
+[08:43:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h15m05s | ETA ~25m02s
+[08:43:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h15m35s | ETA ~25m12s
+[08:44:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h16m05s | ETA ~25m22s
+[08:44:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h16m35s | ETA ~25m32s
+[08:45:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 30/40 tasks | 1h17m05s | ETA ~25m42s
+[08:45:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h17m35s | ETA ~19m24s
+[08:46:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h18m05s | ETA ~19m31s
+[08:46:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h18m35s | ETA ~19m39s
+[08:47:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h19m05s | ETA ~19m46s
+[08:47:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h19m35s | ETA ~19m54s
+[08:48:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h20m05s | ETA ~20m01s
+[08:48:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h20m35s | ETA ~20m09s
+[08:49:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h21m05s | ETA ~20m16s
+[08:49:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h21m35s | ETA ~20m24s
+[08:50:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h22m05s | ETA ~20m31s
+[08:50:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h22m35s | ETA ~20m39s
+[08:51:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 32/40 tasks | 1h23m05s | ETA ~20m46s
+[08:51:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h23m35s | ETA ~14m45s
+[08:52:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h24m05s | ETA ~14m50s
+[08:52:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h24m35s | ETA ~14m56s
+[08:53:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h25m05s | ETA ~15m01s
+[08:53:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h25m35s | ETA ~15m06s
+[08:54:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h26m05s | ETA ~15m11s
+[08:54:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h26m35s | ETA ~15m17s
+[08:55:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h27m05s | ETA ~15m22s
+[08:55:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h27m35s | ETA ~15m27s
+[08:56:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h28m05s | ETA ~15m33s
+[08:56:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h28m35s | ETA ~15m38s
+[08:57:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h29m05s | ETA ~15m43s
+[08:57:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 34/40 tasks | 1h29m35s | ETA ~15m49s
+[08:58:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h30m05s | ETA ~10m01s
+[08:58:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h30m35s | ETA ~10m04s
+[08:59:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h31m05s | ETA ~10m07s
+[08:59:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h31m35s | ETA ~10m11s
+[09:00:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h32m05s | ETA ~10m14s
+[09:00:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h32m35s | ETA ~10m17s
+[09:01:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h33m05s | ETA ~10m21s
+[09:01:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h33m35s | ETA ~10m24s
+[09:02:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h34m05s | ETA ~10m27s
+[09:02:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h34m35s | ETA ~10m31s
+[09:03:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h35m05s | ETA ~10m34s
+[09:03:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 1h35m35s | ETA ~10m37s
+[09:04:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h36m05s | ETA ~5m03s
+[09:04:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h36m35s | ETA ~5m05s
+[09:05:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h37m05s | ETA ~5m07s
+[09:05:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h37m35s | ETA ~5m08s
+[09:06:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h38m05s | ETA ~5m10s
+[09:06:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h38m35s | ETA ~5m11s
+[09:07:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h39m05s | ETA ~5m13s
+[09:07:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h39m35s | ETA ~5m14s
+[09:08:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h40m05s | ETA ~5m16s
+[09:08:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h40m35s | ETA ~5m18s
+[09:09:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h41m05s | ETA ~5m19s
+[09:09:45]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 38/40 tasks | 1h41m35s | ETA ~5m21s
+[09:10:15]     .. still running: Tuning [2/6] kNN > CV search: 8 candidates x 5 folds + refit | 39/40 tasks | 1h42m05s | ETA ~2m37s
+[09:10:16]   << CV search: 8 candidates x 5 folds + refit - done in 1h42m06s
+  kNN           CV PR-AUC=0.8209  params={'weights': 'distance', 'p': 1, 'n_neighbors': 25}
+[09:10:16]   >> Scoring the validation set
+[09:10:50]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 34s
+[09:11:20]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 1m04s
+[09:11:50]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 1m34s
+[09:12:20]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 2m04s
+[09:12:50]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 2m34s
+[09:13:20]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 3m04s
+[09:13:50]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 3m34s
+[09:14:20]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 4m04s
+[09:14:50]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 4m34s
+[09:15:20]     .. still running: Tuning [2/6] kNN > Scoring the validation set | 5m04s
+[09:15:32]   << Scoring the validation set - done in 5m16s
+[09:15:32] << Tuning [2/6] kNN - done in 1h47m22s
+[09:15:32] >> Tuning [3/6] NaiveBayes   (ETA for the rest ~3h48m45s)
+[09:15:32]   >> CV search: 4 candidates x 5 folds + refit
+[09:15:41]   << CV search: 4 candidates x 5 folds + refit - done in 9s
+  NaiveBayes    CV PR-AUC=0.0854  params={'var_smoothing': 1e-05}
+[09:15:41]   >> Scoring the validation set
+[09:15:41]   << Scoring the validation set - done in 0s
+[09:15:41] << Tuning [3/6] NaiveBayes - done in 9s
+[09:15:41] >> Tuning [4/6] LogReg   (ETA for the rest ~1h54m32s)
+[09:15:41]   >> CV search: 4 candidates x 5 folds + refit
+[09:15:56]   << CV search: 4 candidates x 5 folds + refit - done in 15s
+  LogReg        CV PR-AUC=0.7564  params={'C': 0.1}
+[09:15:56]   >> Scoring the validation set
+[09:15:56]   << Scoring the validation set - done in 0s
+[09:15:56] << Tuning [4/6] LogReg - done in 15s
+[09:15:56] >> Tuning [5/6] RandomForest   (ETA for the rest ~57m23s)
+[09:15:56]   >> CV search: 2 candidates x 5 folds + refit
+[09:16:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 34s
+[09:17:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 1m04s
+[09:17:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 1m34s
+[09:18:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 2m04s
+[09:18:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 2m34s
+[09:19:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 3m04s
+[09:19:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 3m34s
+[09:20:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 4m04s
+[09:20:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 0/10 tasks | 4m34s
+[09:21:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 1/10 tasks | 5m04s | ETA ~45m35s
+[09:21:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 5m34s | ETA ~22m16s
+[09:22:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 6m04s | ETA ~24m16s
+[09:22:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 6m34s | ETA ~26m16s
+[09:23:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 7m04s | ETA ~28m16s
+[09:23:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 7m34s | ETA ~30m16s
+[09:24:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 8m04s | ETA ~32m16s
+[09:24:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 8m34s | ETA ~34m16s
+[09:25:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 9m04s | ETA ~36m16s
+[09:25:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 9m34s | ETA ~38m16s
+[09:26:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 2/10 tasks | 10m04s | ETA ~40m16s
+[09:26:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 3/10 tasks | 10m34s | ETA ~24m39s
+[09:27:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 11m04s | ETA ~16m36s
+[09:27:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 11m34s | ETA ~17m21s
+[09:28:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 12m04s | ETA ~18m06s
+[09:28:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 12m34s | ETA ~18m51s
+[09:29:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 13m04s | ETA ~19m36s
+[09:29:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 13m34s | ETA ~20m21s
+[09:30:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 14m04s | ETA ~21m06s
+[09:30:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 14m34s | ETA ~21m51s
+[09:31:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 4/10 tasks | 15m04s | ETA ~22m36s
+[09:31:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 5/10 tasks | 15m34s | ETA ~15m34s
+[09:32:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 16m04s | ETA ~10m43s
+[09:32:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 16m34s | ETA ~11m03s
+[09:33:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 17m04s | ETA ~11m23s
+[09:33:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 17m34s | ETA ~11m43s
+[09:34:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 18m04s | ETA ~12m03s
+[09:34:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 18m34s | ETA ~12m23s
+[09:35:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 19m04s | ETA ~12m43s
+[09:35:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 19m34s | ETA ~13m03s
+[09:36:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 20m04s | ETA ~13m23s
+[09:36:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 6/10 tasks | 20m34s | ETA ~13m43s
+[09:37:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 21m04s | ETA ~5m16s
+[09:37:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 21m34s | ETA ~5m24s
+[09:38:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 22m04s | ETA ~5m31s
+[09:38:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 22m34s | ETA ~5m39s
+[09:39:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 23m04s | ETA ~5m46s
+[09:39:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 23m34s | ETA ~5m54s
+[09:40:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 24m04s | ETA ~6m01s
+[09:40:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 24m34s | ETA ~6m09s
+[09:41:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 25m04s | ETA ~6m16s
+[09:41:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 25m34s | ETA ~6m24s
+[09:42:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 8/10 tasks | 26m04s | ETA ~6m31s
+[09:42:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 26m34s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:43:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 27m04s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:43:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 27m34s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:44:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 28m04s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:44:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 28m34s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:45:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 29m04s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:45:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 29m34s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:46:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 30m04s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:46:30]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 30m34s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:47:00]     .. still running: Tuning [5/6] RandomForest > CV search: 2 candidates x 5 folds + refit | 10/10 tasks | 31m04s | all tasks done, finishing up (e.g. refitting the best candidate)
+[09:47:19]   << CV search: 2 candidates x 5 folds + refit - done in 31m23s
+  RandomForest  CV PR-AUC=0.8379  params={'min_samples_leaf': 1}
+[09:47:19]   >> Scoring the validation set
+[09:47:19]   << Scoring the validation set - done in 1s
+[09:47:19] << Tuning [5/6] RandomForest - done in 31m23s
+[09:47:19] >> Tuning [6/6] LightGBM   (ETA for the rest ~29m14s)
+[09:47:19]   >> CV search: 8 candidates x 5 folds + refit
+[09:47:50]     .. still running: Tuning [6/6] LightGBM > CV search: 8 candidates x 5 folds + refit | 6/40 tasks | 31s | ETA ~2m55s
+[09:48:20]     .. still running: Tuning [6/6] LightGBM > CV search: 8 candidates x 5 folds + refit | 18/40 tasks | 1m01s | ETA ~1m14s
+[09:48:50]     .. still running: Tuning [6/6] LightGBM > CV search: 8 candidates x 5 folds + refit | 28/40 tasks | 1m31s | ETA ~39s
+[09:49:20]     .. still running: Tuning [6/6] LightGBM > CV search: 8 candidates x 5 folds + refit | 36/40 tasks | 2m01s | ETA ~13s
+[09:49:38]   << CV search: 8 candidates x 5 folds + refit - done in 2m19s
+  LightGBM      CV PR-AUC=0.8221  params={'min_child_samples': 100, 'max_depth': -1, 'learning_rate': 0.03}
+[09:49:38]   >> Scoring the validation set
+[09:49:39]   << Scoring the validation set - done in 0s
+[09:49:39] << Tuning [6/6] LightGBM - done in 2m19s
+
+Validation results, default 0.5 threshold
+           Model  Threshold    TN  FP  FN  TP  Accuracy  Precision  Recall     F1    MCC  ROC_AUC  PR_AUC
+    RandomForest        0.5 42487   1  15  56    0.9996     0.9825  0.7887 0.8750 0.8801   0.9347  0.8230
+        LightGBM        0.5 42487   1  20  51    0.9995     0.9808  0.7183 0.8293 0.8391   0.9758  0.8020
+             kNN        0.5 42486   2  20  51    0.9995     0.9623  0.7183 0.8226 0.8312   0.9150  0.7980
+    DecisionTree        0.5 42480   8  27  44    0.9992     0.8462  0.6197 0.7154 0.7238   0.9409  0.7255
+          LogReg        0.5 42482   6  36  35    0.9990     0.8537  0.4930 0.6250 0.6483   0.9692  0.6926
+      NaiveBayes        0.5 41543 945  13  58    0.9775     0.0578  0.8169 0.1080 0.2138   0.9490  0.0773
+MajorityBaseline        0.5 42488   0  71   0    0.9983     0.0000  0.0000 0.0000 0.0000   0.5000  0.0017
+
+[B] Imbalance strategies for: RandomForest, LightGBM
+[09:49:39] >> Strategy fit [1/8] RandomForest / a) none
+[09:50:10]   .. still running: Strategy fit [1/8] RandomForest / a) none | 32s
+[09:50:40]   .. still running: Strategy fit [1/8] RandomForest / a) none | 1m02s
+[09:51:10]   .. still running: Strategy fit [1/8] RandomForest / a) none | 1m32s
+[09:51:40]   .. still running: Strategy fit [1/8] RandomForest / a) none | 2m02s
+[09:52:10]   .. still running: Strategy fit [1/8] RandomForest / a) none | 2m32s
+[09:52:40]   .. still running: Strategy fit [1/8] RandomForest / a) none | 3m02s
+[09:53:10]   .. still running: Strategy fit [1/8] RandomForest / a) none | 3m32s
+[09:53:17] << Strategy fit [1/8] RandomForest / a) none - done in 3m39s
+[09:53:17] >> Strategy fit [2/8] RandomForest / b) class weights   (ETA for the rest ~25m31s)
+[09:53:50]   .. still running: Strategy fit [2/8] RandomForest / b) class weights | 33s
+[09:54:20]   .. still running: Strategy fit [2/8] RandomForest / b) class weights | 1m03s
+[09:54:50]   .. still running: Strategy fit [2/8] RandomForest / b) class weights | 1m33s
+[09:55:12] << Strategy fit [2/8] RandomForest / b) class weights - done in 1m55s
+[09:55:12] >> Strategy fit [3/8] RandomForest / c) undersample   (ETA for the rest ~16m40s)
+[09:55:13] << Strategy fit [3/8] RandomForest / c) undersample - done in 1s
+[09:55:13] >> Strategy fit [4/8] RandomForest / d) SMOTE   (ETA for the rest ~9m17s)
+[09:55:45]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 33s
+[09:56:15]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 1m03s
+[09:56:45]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 1m33s
+[09:57:15]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 2m03s
+[09:57:45]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 2m33s
+[09:58:15]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 3m03s
+[09:58:45]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 3m33s
+[09:59:15]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 4m03s
+[09:59:45]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 4m33s
+[10:00:15]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 5m03s
+[10:00:45]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 5m33s
+[10:01:15]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 6m03s
+[10:01:45]   .. still running: Strategy fit [4/8] RandomForest / d) SMOTE | 6m33s
+[10:01:48] << Strategy fit [4/8] RandomForest / d) SMOTE - done in 6m36s
+[10:01:48] >> Strategy fit [5/8] LightGBM / a) none   (ETA for the rest ~12m10s)
+[10:01:52] << Strategy fit [5/8] LightGBM / a) none - done in 4s
+[10:01:52] >> Strategy fit [6/8] LightGBM / b) class weights   (ETA for the rest ~7m20s)
+[10:01:57] << Strategy fit [6/8] LightGBM / b) class weights - done in 5s
+[10:01:57] >> Strategy fit [7/8] LightGBM / c) undersample   (ETA for the rest ~4m06s)
+[10:01:57] << Strategy fit [7/8] LightGBM / c) undersample - done in 1s
+[10:01:57] >> Strategy fit [8/8] LightGBM / d) SMOTE   (ETA for the rest ~1m46s)
+[10:02:08] << Strategy fit [8/8] LightGBM / d) SMOTE - done in 11s
+
+Model x strategy x metrics (validation set)
+       Model            Strategy  Threshold  TP   FP  FN  Precision  Recall     F1    MCC  ROC_AUC  PR_AUC
+RandomForest             a) none        0.5  56    1  15     0.9825  0.7887 0.8750 0.8801   0.9347  0.8230
+RandomForest e) threshold moving        0.5  56    1  15     0.9825  0.7887 0.8750 0.8801   0.9347  0.8230
+RandomForest    b) class weights        0.5  49    0  22     1.0000  0.6901 0.8167 0.8305   0.9493  0.8449
+RandomForest      c) undersample        0.5  62 1256   9     0.0470  0.8732 0.0893 0.1988   0.9756  0.7065
+RandomForest            d) SMOTE        0.5  53    3  18     0.9464  0.7465 0.8346 0.8403   0.9427  0.8353
+    LightGBM             a) none        0.5  38  103  33     0.2695  0.5352 0.3585 0.3784   0.7214  0.2189
+    LightGBM e) threshold moving        1.0  36   54  35     0.4000  0.5070 0.4472 0.4493   0.7214  0.2189
+    LightGBM    b) class weights        0.5  53    6  18     0.8983  0.7465 0.8154 0.8186   0.9756  0.8184
+    LightGBM      c) undersample        0.5  62 1596   9     0.0374  0.8732 0.0717 0.1763   0.9793  0.6446
+    LightGBM            d) SMOTE        0.5  58   34  13     0.6304  0.8169 0.7117 0.7171   0.9708  0.7744
+
+Why resampling must stay inside the CV folds: SMOTE interpolates between neighbouring frauds. Applied before splitting, synthetic points derived from a validation fraud end up in training, so the model is partly scored on rows it has already seen and PR-AUC is optimistically biased. Undersampling before splitting is just as bad in the other direction: it changes the class prior of the held-out fold, so precision no longer reflects the 0.17% reality.
+
+======================================================================
+TASK 1.3 - Evaluating rare-event detectors correctly   [run time so far: 2h41m20s]
+======================================================================
+A model that predicts 'legit' for all 42559 test transactions scores 99.8332% accuracy while catching 0 of 71 frauds.
+Its recall, precision, F1 and MCC are all 0, and the 71 frauds it misses are the only rows the bank actually loses money on. Accuracy is dominated by the 99.83% majority class, so it cannot distinguish this model from a perfect one; PR-AUC and MCC can.
+[10:02:08] >> Test-set metrics [1/3] RandomForest
+[10:02:08] << Test-set metrics [1/3] RandomForest - done in 0s
+[10:02:08] >> Test-set metrics [2/3] LightGBM   (ETA for the rest ~1s)
+[10:02:08] << Test-set metrics [2/3] LightGBM - done in 0s
+[10:02:08] >> Test-set metrics [3/3] kNN   (ETA for the rest ~0s)
+[10:02:40]   .. still running: Test-set metrics [3/3] kNN | 32s
+[10:03:10]   .. still running: Test-set metrics [3/3] kNN | 1m02s
+[10:03:40]   .. still running: Test-set metrics [3/3] kNN | 1m32s
+[10:04:10]   .. still running: Test-set metrics [3/3] kNN | 2m02s
+[10:04:40]   .. still running: Test-set metrics [3/3] kNN | 2m32s
+[10:05:10]   .. still running: Test-set metrics [3/3] kNN | 3m02s
+[10:05:40]   .. still running: Test-set metrics [3/3] kNN | 3m32s
+[10:06:10]   .. still running: Test-set metrics [3/3] kNN | 4m02s
+[10:06:40]   .. still running: Test-set metrics [3/3] kNN | 4m32s
+[10:07:10]   .. still running: Test-set metrics [3/3] kNN | 5m02s
+[10:07:28] << Test-set metrics [3/3] kNN - done in 5m20s
+
+Final test-set metrics
+       Model  Threshold    TN  FP  FN  TP  Accuracy  Precision  Recall     F1    MCC  ROC_AUC  PR_AUC
+RandomForest        0.5 42484   4  16  55    0.9995     0.9322  0.7746 0.8462 0.8496   0.9551  0.7824
+    LightGBM        0.5 42482   6  21  50    0.9994     0.8929  0.7042 0.7874 0.7927   0.9545  0.7727
+         kNN        0.5 42482   6  18  53    0.9994     0.8983  0.7465 0.8154 0.8186   0.9150  0.7875
+[10:07:28] >> ROC/PR curve [1/3] RandomForest
+[10:07:29] << ROC/PR curve [1/3] RandomForest - done in 0s
+[10:07:29] >> ROC/PR curve [2/3] LightGBM   (ETA for the rest ~1s)
+[10:07:29] << ROC/PR curve [2/3] LightGBM - done in 0s
+[10:07:29] >> ROC/PR curve [3/3] kNN   (ETA for the rest ~0s)
+[10:08:00]   .. still running: ROC/PR curve [3/3] kNN | 32s
+[10:08:30]   .. still running: ROC/PR curve [3/3] kNN | 1m02s
+[10:09:00]   .. still running: ROC/PR curve [3/3] kNN | 1m32s
+[10:09:30]   .. still running: ROC/PR curve [3/3] kNN | 2m02s
+[10:10:00]   .. still running: ROC/PR curve [3/3] kNN | 2m32s
+[10:10:30]   .. still running: ROC/PR curve [3/3] kNN | 3m02s
+[10:11:00]   .. still running: ROC/PR curve [3/3] kNN | 3m32s
+[10:11:30]   .. still running: ROC/PR curve [3/3] kNN | 4m02s
+[10:12:00]   .. still running: ROC/PR curve [3/3] kNN | 4m32s
+[10:12:30]   .. still running: ROC/PR curve [3/3] kNN | 5m02s
+[10:12:44] << ROC/PR curve [3/3] kNN - done in 5m15s
+  saved figure -> figures/13_roc_pr_curves.png
+
+Why ROC looks optimistic here: the false positive rate has ~57,000 legitimate transactions in its denominator, so 500 false alarms move it by less than 0.01 and the curve stays hugging the top-left corner. Precision uses those same 500 false alarms against roughly 100 frauds, so it collapses. The PR curve therefore reflects the analyst's actual workload; ROC does not.
+[10:12:45] >> Cost-optimal threshold for RandomForest
+  saved figure -> figures/13_cost_curve.png
+
+Cost on test set (RandomForest; FN = Amount, FP = 5 units)
+         Threshold  TestCost
+     default 0.500   3498.73
+cost-optimal 0.371   3503.73
+[10:12:46] << Cost-optimal threshold for RandomForest - done in 1s
+[10:12:46] >> McNemar test between the two best models
+
+McNemar (RandomForest vs LightGBM): RandomForest-only correct = 8, LightGBM-only correct = 1, p = 0.0391
+  -> difference is statistically significant at alpha=0.05.
+[10:12:46] << McNemar test between the two best models - done in 0s
+
+======================================================================
+TASK 1.4 - Unsupervised and semi-supervised anomaly detection   [run time so far: 2h51m59s]
+======================================================================
+[10:12:47] >> Detector [1/6] IsolationForest / unsupervised
+  IsolationForest  unsupervised     PR-AUC=0.1550
+[10:12:48] << Detector [1/6] IsolationForest / unsupervised - done in 1s
+[10:12:48] >> Detector [2/6] LOF / unsupervised   (ETA for the rest ~7s)
+  LOF              unsupervised     PR-AUC=0.1753
+[10:12:52] << Detector [2/6] LOF / unsupervised - done in 4s
+[10:12:52] >> Detector [3/6] OneClassSVM / unsupervised   (ETA for the rest ~11s)
+  OneClassSVM      unsupervised     PR-AUC=0.1296
+[10:12:54] << Detector [3/6] OneClassSVM / unsupervised - done in 1s
+[10:12:54] >> Detector [4/6] IsolationForest / semi-supervised   (ETA for the rest ~7s)
+  IsolationForest  semi-supervised  PR-AUC=0.1415
+[10:12:55] << Detector [4/6] IsolationForest / semi-supervised - done in 1s
+[10:12:55] >> Detector [5/6] LOF / semi-supervised   (ETA for the rest ~4s)
+  LOF              semi-supervised  PR-AUC=0.5482
+[10:13:00] << Detector [5/6] LOF / semi-supervised - done in 5s
+[10:13:00] >> Detector [6/6] OneClassSVM / semi-supervised   (ETA for the rest ~3s)
+  OneClassSVM      semi-supervised  PR-AUC=0.1711
+[10:13:02] << Detector [6/6] OneClassSVM / semi-supervised - done in 1s
+
+Anomaly detectors on the test set (k = 71 true frauds)
+       Detector         Setting  FitRows  ROC_AUC  PR_AUC  Precision@k
+            LOF semi-supervised    10000   0.9546  0.5482       0.6620
+            LOF    unsupervised    10000   0.9460  0.1753       0.2254
+    OneClassSVM semi-supervised    10000   0.9312  0.1711       0.1549
+IsolationForest    unsupervised   198608   0.9603  0.1550       0.2394
+IsolationForest semi-supervised   198277   0.9535  0.1415       0.2535
+    OneClassSVM    unsupervised    10000   0.9271  0.1296       0.2113
+
+Label-budget experiment
+[10:13:02] >> Refitting RandomForest [1/5] on 1% of the labels
+      1% labels (3 frauds) -> PR-AUC 0.6315
+[10:13:02] << Refitting RandomForest [1/5] on 1% of the labels - done in 1s
+[10:13:02] >> Refitting RandomForest [2/5] on 5% of the labels   (ETA for the rest ~2s)
+      5% labels (17 frauds) -> PR-AUC 0.7398
+[10:13:04] << Refitting RandomForest [2/5] on 5% of the labels - done in 2s
+[10:13:04] >> Refitting RandomForest [3/5] on 10% of the labels   (ETA for the rest ~4s)
+     10% labels (33 frauds) -> PR-AUC 0.7782
+[10:13:12] << Refitting RandomForest [3/5] on 10% of the labels - done in 7s
+[10:13:12] >> Refitting RandomForest [4/5] on 25% of the labels   (ETA for the rest ~7s)
+     25% labels (83 frauds) -> PR-AUC 0.7743
+[10:13:38] << Refitting RandomForest [4/5] on 25% of the labels - done in 27s
+[10:13:38] >> Refitting RandomForest [5/5] on 100% of the labels   (ETA for the rest ~9s)
+[10:14:10]   .. still running: Refitting RandomForest [5/5] on 100% of the labels | 32s
+[10:14:40]   .. still running: Refitting RandomForest [5/5] on 100% of the labels | 1m02s
+[10:15:10]   .. still running: Refitting RandomForest [5/5] on 100% of the labels | 1m32s
+[10:15:40]   .. still running: Refitting RandomForest [5/5] on 100% of the labels | 2m02s
+[10:16:10]   .. still running: Refitting RandomForest [5/5] on 100% of the labels | 2m32s
+[10:16:40]   .. still running: Refitting RandomForest [5/5] on 100% of the labels | 3m02s
+[10:17:10]   .. still running: Refitting RandomForest [5/5] on 100% of the labels | 3m32s
+    100% labels (331 frauds) -> PR-AUC 0.7824
+[10:17:18] << Refitting RandomForest [5/5] on 100% of the labels - done in 3m40s
+
+PR-AUC vs label budget
+ Budget  LabelledRows  Frauds  PR_AUC
+   0.01          1986       3  0.6315
+   0.05          9930      17  0.7398
+   0.10         19860      33  0.7782
+   0.25         49652      83  0.7743
+   1.00        198608     331  0.7824
+  saved figure -> figures/14_label_budget.png
+
+Supervision overtakes the best anomaly detector (PR-AUC 0.5482) at a label budget of 1%.
+
+======================================================================
+TASK 1.5 - Drift over the test period   [run time so far: 2h56m31s]
+======================================================================
+Time-ordered split: train (198608, 30) (366 frauds), val (42559, 30) (55), test (42559, 30) (52)
+[10:17:18] >> Refitting RandomForest on the time-ordered train split
+[10:17:50]   .. still running: Refitting RandomForest on the time-ordered train split | 32s
+[10:18:20]   .. still running: Refitting RandomForest on the time-ordered train split | 1m02s
+[10:18:50]   .. still running: Refitting RandomForest on the time-ordered train split | 1m32s
+[10:19:20]   .. still running: Refitting RandomForest on the time-ordered train split | 2m02s
+[10:19:50]   .. still running: Refitting RandomForest on the time-ordered train split | 2m32s
+[10:20:20]   .. still running: Refitting RandomForest on the time-ordered train split | 3m02s
+[10:20:42] << Refitting RandomForest on the time-ordered train split - done in 3m24s
+Supervised threshold chosen on the time-ordered validation window: 0.330
+[10:20:42] >> Fitting IsolationForest on past normal traffic
+[10:20:43] << Fitting IsolationForest on past normal traffic - done in 1s
+[10:20:43] >> Scoring time window [1/4] W1
+[10:20:44] << Scoring time window [1/4] W1 - done in 0s
+[10:20:44] >> Scoring time window [2/4] W2   (ETA for the rest ~1s)
+[10:20:44] << Scoring time window [2/4] W2 - done in 0s
+[10:20:44] >> Scoring time window [3/4] W3   (ETA for the rest ~0s)
+[10:20:44] << Scoring time window [3/4] W3 - done in 0s
+[10:20:44] >> Scoring time window [4/4] W4   (ETA for the rest ~0s)
+[10:20:44] << Scoring time window [4/4] W4 - done in 0s
+
+Per-window performance (4 consecutive windows)
+Window           Model  Rows  Frauds  Precision  Recall
+    W1      Supervised 10640      25     1.0000  0.7600
+    W1 IsolationForest 10640      25     0.1000  0.0800
+    W2      Supervised 10640      14     1.0000  0.7857
+    W2 IsolationForest 10640      14     0.0500  0.0714
+    W3      Supervised 10640       3     0.6667  0.6667
+    W3 IsolationForest 10640       3     0.0000  0.0000
+    W4      Supervised 10639      10     0.5556  0.5000
+    W4 IsolationForest 10639      10     0.0000  0.0000
+  saved figure -> figures/15_drift_windows.png
+
+MONITORING AND RETRAINING PROPOSAL
+  Track daily, with alerting thresholds:
+    - Alert volume and precision-at-the-alert-budget, measured on the analyst
+      dispositions that come back 24-72h later. A sustained drop of >20% relative to
+      the trailing 4-week median triggers investigation.
+    - Feature drift: population stability index per feature against the training
+      window; PSI > 0.2 on any feature in the model's top 10 raises a warning.
+    - Score drift: KS distance between today's score distribution and the training
+      distribution. This catches drift before any label arrives, which matters
+      because fraud labels are delayed by chargeback cycles.
+  Retraining:
+    - Scheduled monthly on a rolling 6-month window, so the model keeps pace with
+      gradual behavioural change.
+    - Event-driven whenever a drift alert fires or recall on confirmed frauds falls
+      below the agreed SLA.
+    - Every candidate is validated on a strictly later time window than it was
+      trained on (the protocol used here), then shadow-deployed for one week before
+      it takes over; the previous model stays warm for instant rollback.
+  Covering the gap between retrains:
+    - Run the unsupervised detector permanently alongside the classifier. It needs no
+      labels, so it is the only component that can flag a genuinely new fraud pattern
+      on day one; its top-ranked unexplained alerts feed the labelling queue and
+      become next month's training data.
+
+
+======================================================================
+TASK 1.6 - Explainability   [run time so far: 2h59m57s]
+======================================================================
+[10:20:44] >> Global feature importance - RandomForest
+[10:20:45]   >> Permutation importance on 5000 test rows x 5 repeats
+[10:20:57]   << Permutation importance on 5000 test rows x 5 repeats - done in 12s
+
+Global feature importance - RandomForest
+Feature  Impurity  Permutation  PermStd
+    V13   0.00869      0.09209  0.01214
+     V3   0.02254      0.00740  0.00000
+    V16   0.05366      0.00740  0.00000
+    V17   0.13090      0.00602  0.00276
+    V24   0.00839      0.00594  0.00291
+ Amount   0.01149      0.00546  0.00007
+     V1   0.01356      0.00449  0.00015
+    V28   0.01048      0.00273  0.00010
+     V9   0.03679      0.00233  0.00008
+     V6   0.01414      0.00209  0.00025
+    V11   0.06356      0.00194  0.00019
+    V15   0.00952      0.00185  0.00020
+     V2   0.01652      0.00182  0.00022
+     V8   0.01235      0.00166  0.00024
+    V19   0.01208      0.00156  0.00012
+  saved figure -> figures/16_global_importance.png
+[10:20:57] << Global feature importance - RandomForest - done in 12s
+[10:20:57] >> Local SHAP explanations - RandomForest
+[10:21:00]   >> SHAP summary on 2000 test rows
+  saved figure -> figures/16_shap_summary.png
+[10:21:23]   << SHAP summary on 2000 test rows - done in 23s
+[10:21:23]   >> SHAP case [1/6] TP txn #4927
+[10:21:23]   << SHAP case [1/6] TP txn #4927 - done in 0s
+[10:21:23]   >> SHAP case [2/6] TP txn #12641   (ETA for the rest ~0s)
+[10:21:23]   << SHAP case [2/6] TP txn #12641 - done in 0s
+[10:21:23]   >> SHAP case [3/6] TP txn #15659   (ETA for the rest ~0s)
+[10:21:23]   << SHAP case [3/6] TP txn #15659 - done in 0s
+[10:21:23]   >> SHAP case [4/6] FP txn #37236   (ETA for the rest ~0s)
+[10:21:23]   << SHAP case [4/6] FP txn #37236 - done in 0s
+[10:21:23]   >> SHAP case [5/6] FP txn #10775   (ETA for the rest ~0s)
+[10:21:23]   << SHAP case [5/6] FP txn #10775 - done in 0s
+[10:21:23]   >> SHAP case [6/6] FN txn #47   (ETA for the rest ~0s)
+[10:21:23]   << SHAP case [6/6] FN txn #47 - done in 0s
+
+Local SHAP explanations
+Case  Index  Score  Amount                            TopDrivers
+  TP   4927   1.00   99.99 V12 (+0.18), V17 (+0.17), V14 (+0.17)
+  TP  12641   1.00    1.00 V14 (+0.24), V12 (+0.23), V17 (+0.17)
+  TP  15659   1.00  118.30 V12 (+0.18), V14 (+0.18), V17 (+0.18)
+  FP  37236   0.89  109.90 V17 (+0.22), V12 (+0.17), V14 (+0.17)
+  FP  10775   0.87    0.76 V14 (+0.26), V17 (+0.20), V10 (+0.13)
+  FN     47   0.00  549.06  V14 (-0.00), V12 (-0.00), V4 (-0.00)
+
+ANALYST SUMMARIES
+  [TP] txn #4927, 99.99 units, risk score 1.000. Flagged, and it was fraud.
+      The score was driven mainly by V12 (+0.18), V17 (+0.17), V14 (+0.17) - these are anonymised behavioural components, so read them as 'this transaction's spending pattern sits far from this account's normal profile' (+ pushes toward fraud, - pulls toward legitimate).
+  [TP] txn #12641, 1.00 units, risk score 1.000. Flagged, and it was fraud.
+      The score was driven mainly by V14 (+0.24), V12 (+0.23), V17 (+0.17) - these are anonymised behavioural components, so read them as 'this transaction's spending pattern sits far from this account's normal profile' (+ pushes toward fraud, - pulls toward legitimate).
+  [TP] txn #15659, 118.30 units, risk score 1.000. Flagged, and it was fraud.
+      The score was driven mainly by V12 (+0.18), V14 (+0.18), V17 (+0.18) - these are anonymised behavioural components, so read them as 'this transaction's spending pattern sits far from this account's normal profile' (+ pushes toward fraud, - pulls toward legitimate).
+  [FP] txn #37236, 109.90 units, risk score 0.890. Flagged, but the customer confirmed it was genuine.
+      The score was driven mainly by V17 (+0.22), V12 (+0.17), V14 (+0.17) - these are anonymised behavioural components, so read them as 'this transaction's spending pattern sits far from this account's normal profile' (+ pushes toward fraud, - pulls toward legitimate).
+  [FP] txn #10775, 0.76 units, risk score 0.870. Flagged, but the customer confirmed it was genuine.
+      The score was driven mainly by V14 (+0.26), V17 (+0.20), V10 (+0.13) - these are anonymised behavioural components, so read them as 'this transaction's spending pattern sits far from this account's normal profile' (+ pushes toward fraud, - pulls toward legitimate).
+  [FN] txn #47, 549.06 units, risk score 0.000. Not flagged, and it turned out to be fraud.
+      The score was driven mainly by V14 (-0.00), V12 (-0.00), V4 (-0.00) - these are anonymised behavioural components, so read them as 'this transaction's spending pattern sits far from this account's normal profile' (+ pushes toward fraud, - pulls toward legitimate).
+[10:21:23] << Local SHAP explanations - RandomForest - done in 26s
+[10:21:23] >> Detector vs classifier agreement
+
+Agreement between detectors and classifier (top 50)
+                         Detector  OverlapTop50  FraudsInDetTop  FraudsInClfTop
+            LOF (semi-supervised)          0.68              35              48
+               LOF (unsupervised)          0.26              15              48
+   IsolationForest (unsupervised)          0.26              14              48
+IsolationForest (semi-supervised)          0.22              13              48
+       OneClassSVM (unsupervised)          0.18              11              48
+    OneClassSVM (semi-supervised)          0.16               8              48
+A low overlap means the two are looking at different things: the classifier ranks on learned fraud *patterns* (the features in the table above), the detector ranks on raw distance from the bulk of the data. The detector's extra alerts are where a genuinely new fraud pattern would first appear.
+[10:21:23] << Detector vs classifier agreement - done in 0s
+
+======================================================================
+TASK 1.7 - Evidence for the recommendation   [run time so far: 3h00m36s]
+======================================================================
+Best supervised model          : RandomForest
+  test PR-AUC / ROC-AUC        : 0.7824 / 0.9551
+  precision / recall / MCC     : 0.932 / 0.775 / 0.850
+  cost-optimal threshold       : 0.371
+  McNemar vs 2nd best (p)      : 0.0391
+Best anomaly detector          : LOF (semi-supervised)
+  test PR-AUC / Precision@k    : 0.5482 / 0.662
+  supervision wins from        : 1% of labels
+Recall across the 4 time windows : [0.76, 0.786, 0.667, 0.5]
+
+WRITE-UP SKELETON (one page, cite the numbers above)
+  1. Recommendation: a hybrid. The supervised model is the primary filter; the
+     anomaly detector runs in parallel as the cover for patterns it has never seen.
+  2. Why not supervised alone: it only detects fraud resembling labelled history,
+     and the per-window recall above shows how it degrades as behaviour moves.
+  3. Why not unsupervised alone: compare the two PR-AUC figures above - at equal
+     alert budget the detector buries analysts in false alarms.
+  4. Operating point: justify the cost-optimal threshold, not 0.5, using the test
+     cost table from Task 1.3.
+  5. Labelling policy: the label-budget curve says how much analyst labelling is
+     worth buying before returns flatten.
+  6. Trust: SHAP gives every alert a reason, which is what makes it actionable.
+  7. Limitations: V1-V28 are PCA components and cannot be read directly; results
+     come from two days of 2013 European card data; costs are assumed, not measured.
+
+
+Done in 3h00m36s. Figures -> figures/, tables -> tables/

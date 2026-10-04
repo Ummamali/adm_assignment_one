@@ -1,0 +1,11 @@
+Model,Strategy,Threshold,TP,FP,FN,Precision,Recall,F1,MCC,ROC_AUC,PR_AUC
+RandomForest,a) none,0.5,56,1,15,0.9825,0.7887,0.875,0.8801,0.9347,0.823
+RandomForest,e) threshold moving,0.5,56,1,15,0.9825,0.7887,0.875,0.8801,0.9347,0.823
+RandomForest,b) class weights,0.5,49,0,22,1.0,0.6901,0.8167,0.8305,0.9493,0.8449
+RandomForest,c) undersample,0.5,62,1256,9,0.047,0.8732,0.0893,0.1988,0.9756,0.7065
+RandomForest,d) SMOTE,0.5,53,3,18,0.9464,0.7465,0.8346,0.8403,0.9427,0.8353
+LightGBM,a) none,0.5,38,103,33,0.2695,0.5352,0.3585,0.3784,0.7214,0.2189
+LightGBM,e) threshold moving,1.0,36,54,35,0.4,0.507,0.4472,0.4493,0.7214,0.2189
+LightGBM,b) class weights,0.5,53,6,18,0.8983,0.7465,0.8154,0.8186,0.9756,0.8184
+LightGBM,c) undersample,0.5,62,1596,9,0.0374,0.8732,0.0717,0.1763,0.9793,0.6446
+LightGBM,d) SMOTE,0.5,58,34,13,0.6304,0.8169,0.7117,0.7171,0.9708,0.7744

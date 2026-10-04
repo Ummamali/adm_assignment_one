@@ -9,6 +9,12 @@ figures/
 tables/
 *.png
 *.jpg
+# ...except the few figures shown in the README, and the saved Colab run
+!docs/img/*.png
+!colab_results/figures/
+!colab_results/tables/
+!colab_results/**/*.png
+!colab_results/**/*.csv
 
 # --- Python -----------------------------------------------------------
 __pycache__/

@@ -1,0 +1,7 @@
+Detector,Setting,FitRows,ROC_AUC,PR_AUC,Precision@k
+LOF,semi-supervised,10000,0.9546,0.5482,0.662
+LOF,unsupervised,10000,0.946,0.1753,0.2254
+OneClassSVM,semi-supervised,10000,0.9312,0.1711,0.1549
+IsolationForest,unsupervised,198608,0.9603,0.155,0.2394
+IsolationForest,semi-supervised,198277,0.9535,0.1415,0.2535
+OneClassSVM,unsupervised,10000,0.9271,0.1296,0.2113

@@ -1,0 +1,9 @@
+Window,Model,Rows,Frauds,Precision,Recall
+W1,Supervised,10640,25,1.0,0.76
+W1,IsolationForest,10640,25,0.1,0.08
+W2,Supervised,10640,14,1.0,0.7857
+W2,IsolationForest,10640,14,0.05,0.0714
+W3,Supervised,10640,3,0.6667,0.6667
+W3,IsolationForest,10640,3,0.0,0.0
+W4,Supervised,10639,10,0.5556,0.5
+W4,IsolationForest,10639,10,0.0,0.0

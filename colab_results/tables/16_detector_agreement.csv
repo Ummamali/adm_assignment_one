@@ -1,0 +1,7 @@
+Detector,OverlapTop50,FraudsInDetTop,FraudsInClfTop
+LOF (semi-supervised),0.68,35,48
+LOF (unsupervised),0.26,15,48
+IsolationForest (unsupervised),0.26,14,48
+IsolationForest (semi-supervised),0.22,13,48
+OneClassSVM (unsupervised),0.18,11,48
+OneClassSVM (semi-supervised),0.16,8,48
